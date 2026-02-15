@@ -1,4 +1,5 @@
 import type { SessionSystemPromptReport } from "../../config/sessions/types.js";
+import type { ErrorKind } from "../pi-embedded-helpers/types.js";
 import type { MessagingToolSend } from "../pi-embedded-messaging.js";
 
 export type EmbeddedPiAgentMeta = {
@@ -56,6 +57,7 @@ export type EmbeddedPiRunResult = {
     mediaUrls?: string[];
     replyToId?: string;
     isError?: boolean;
+    errorKind?: ErrorKind;
   }>;
   meta: EmbeddedPiRunMeta;
   // True if a messaging tool (telegram, whatsapp, discord, slack, sessions_send)
