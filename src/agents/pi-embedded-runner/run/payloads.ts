@@ -7,6 +7,7 @@ import type { OpenClawConfig } from "../../../config/config.js";
 import {
   BILLING_ERROR_USER_MESSAGE,
   classifyFailoverReason,
+  deriveErrorKind,
   formatAssistantErrorText,
   formatRawAssistantErrorForUi,
   getApiErrorPayloadFingerprint,
@@ -72,20 +73,6 @@ function shouldShowToolErrorWarning(params: {
     return false;
   }
   return !params.hasUserFacingReply && !isRecoverableToolError(params.lastToolError.error);
-}
-
-function deriveErrorKind(rawErrorMessage: string): ErrorKind {
-  if (isCompactionFailureError(rawErrorMessage)) {
-    return "compaction_failure";
-  }
-  if (isLikelyContextOverflowError(rawErrorMessage)) {
-    return "context_overflow";
-  }
-  const failoverReason = classifyFailoverReason(rawErrorMessage);
-  if (failoverReason && failoverReason !== "unknown") {
-    return failoverReason;
-  }
-  return "unknown";
 }
 
 export function buildEmbeddedRunPayloads(params: {
