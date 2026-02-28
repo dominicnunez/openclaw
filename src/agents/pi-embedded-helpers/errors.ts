@@ -3,7 +3,7 @@ import type { OpenClawConfig } from "../../config/config.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
 import { formatSandboxToolPolicyBlockedMessage } from "../sandbox.js";
 import { stableStringify } from "../stable-stringify.js";
-import type { FailoverReason } from "./types.js";
+import type { ErrorKind, FailoverReason } from "./types.js";
 
 const log = createSubsystemLogger("errors");
 
@@ -501,11 +501,7 @@ export function formatAssistantErrorText(
   }
 
   // Catch role ordering errors - including JSON-wrapped and "400" prefix variants
-  if (
-    /incorrect role information|roles must alternate|400.*role|"message".*role.*information/i.test(
-      raw,
-    )
-  ) {
+  if (isRoleOrderingError(raw)) {
     return (
       "Message ordering conflict - please try again. " +
       "If this persists, use /new to start a fresh session."
@@ -549,7 +545,10 @@ export function formatAssistantErrorText(
   return raw.length > 600 ? `${raw.slice(0, 600)}…` : raw;
 }
 
-export function sanitizeUserFacingText(text: string, opts?: { errorContext?: boolean }): string {
+export function sanitizeUserFacingText(
+  text: string,
+  opts?: { errorContext?: boolean; errorKind?: ErrorKind },
+): string {
   if (!text) {
     return text;
   }
@@ -563,36 +562,33 @@ export function sanitizeUserFacingText(text: string, opts?: { errorContext?: boo
   // Only apply error-pattern rewrites when the caller knows this text is an error payload.
   // Otherwise we risk swallowing legitimate assistant text that merely *mentions* these errors.
   if (errorContext) {
-    if (/incorrect role information|roles must alternate/i.test(trimmed)) {
-      return (
-        "Message ordering conflict - please try again. " +
-        "If this persists, use /new to start a fresh session."
-      );
-    }
-
-    if (shouldRewriteContextOverflowText(trimmed)) {
-      return (
-        "Context overflow: prompt too large for the model. " +
-        "Try /reset (or /new) to start a fresh session, or use a larger-context model."
-      );
-    }
-
-    if (isBillingErrorMessage(trimmed)) {
-      return BILLING_ERROR_USER_MESSAGE;
-    }
-
-    if (isRawApiErrorPayload(trimmed) || isLikelyHttpErrorText(trimmed)) {
-      return formatRawAssistantErrorForUi(trimmed);
-    }
-
-    if (ERROR_PREFIX_RE.test(trimmed)) {
-      const prefixedCopy = formatRateLimitOrOverloadedErrorCopy(trimmed);
-      if (prefixedCopy) {
-        return prefixedCopy;
-      }
-      if (isTimeoutErrorMessage(trimmed)) {
+    // Structured errorKind classification: the caller provides the error kind,
+    // preventing false positives (e.g. a tool returning HTTP 402 being
+    // misclassified as an LLM billing error).
+    switch (opts?.errorKind) {
+      case "billing":
+        return BILLING_ERROR_USER_MESSAGE;
+      case "rate_limit":
+        return RATE_LIMIT_ERROR_USER_MESSAGE;
+      case "overloaded":
+        return OVERLOADED_ERROR_USER_MESSAGE;
+      case "timeout":
         return "LLM request timed out.";
-      }
+      case "context_overflow":
+      case "compaction_failure":
+        return (
+          "Context overflow: prompt too large for the model. " +
+          "Try /reset (or /new) to start a fresh session, or use a larger-context model."
+        );
+      case "role_ordering":
+        return (
+          "Message ordering conflict - please try again. " +
+          "If this persists, use /new to start a fresh session."
+        );
+    }
+
+    // For unclassified errors, format raw API payloads but don't reclassify via regex.
+    if (isRawApiErrorPayload(trimmed) || isLikelyHttpErrorText(trimmed)) {
       return formatRawAssistantErrorForUi(trimmed);
     }
   }
@@ -877,6 +873,46 @@ export function isModelNotFoundErrorMessage(raw: string): boolean {
   }
 
   return false;
+}
+
+const ROLE_ORDERING_RE =
+  /incorrect role information|roles must alternate|400.*role|"message".*role.*information/i;
+
+export function isRoleOrderingError(raw: string): boolean {
+  return ROLE_ORDERING_RE.test(raw);
+}
+
+export function deriveErrorKind(rawErrorMessage: string): ErrorKind {
+  if (isCompactionFailureError(rawErrorMessage)) {
+    return "compaction_failure";
+  }
+  if (isLikelyContextOverflowError(rawErrorMessage)) {
+    return "context_overflow";
+  }
+  if (isRoleOrderingError(rawErrorMessage)) {
+    return "role_ordering";
+  }
+  // Guard transient HTTP errors before overloaded, since isOverloadedErrorMessage
+  // matches "service unavailable" which overlaps with 503 responses.
+  if (isTransientHttpError(rawErrorMessage)) {
+    return "unknown";
+  }
+  if (isOverloadedErrorMessage(rawErrorMessage)) {
+    return "overloaded";
+  }
+  if (isImageDimensionErrorMessage(rawErrorMessage) || isImageSizeError(rawErrorMessage)) {
+    return "image_size";
+  }
+  const failoverReason = classifyFailoverReason(rawErrorMessage);
+  if (
+    failoverReason &&
+    failoverReason !== "unknown" &&
+    failoverReason !== "auth_permanent" &&
+    failoverReason !== "model_not_found"
+  ) {
+    return failoverReason;
+  }
+  return "unknown";
 }
 
 export function classifyFailoverReason(raw: string): FailoverReason | null {

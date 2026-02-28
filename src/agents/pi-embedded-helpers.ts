@@ -11,6 +11,7 @@ export {
   BILLING_ERROR_USER_MESSAGE,
   formatBillingErrorMessage,
   classifyFailoverReason,
+  deriveErrorKind,
   formatRawAssistantErrorForUi,
   formatAssistantErrorText,
   getApiErrorPayloadFingerprint,
@@ -33,6 +34,7 @@ export {
   isImageSizeError,
   isOverloadedErrorMessage,
   isRawApiErrorPayload,
+  isRoleOrderingError,
   isRateLimitAssistantError,
   isRateLimitErrorMessage,
   isTransientHttpError,
@@ -60,7 +62,11 @@ export {
   validateAnthropicTurns,
   validateGeminiTurns,
 } from "./pi-embedded-helpers/turns.js";
-export type { EmbeddedContextFile, FailoverReason } from "./pi-embedded-helpers/types.js";
+export type {
+  EmbeddedContextFile,
+  ErrorKind,
+  FailoverReason,
+} from "./pi-embedded-helpers/types.js";
 
 export type { ToolCallIdMode } from "./tool-call-id.js";
 export { isValidCloudCodeAssistToolId, sanitizeToolCallId } from "./tool-call-id.js";

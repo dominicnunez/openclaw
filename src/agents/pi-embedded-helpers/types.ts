@@ -9,3 +9,16 @@ export type FailoverReason =
   | "timeout"
   | "model_not_found"
   | "unknown";
+
+export type ErrorKind =
+  | "billing"
+  | "rate_limit"
+  | "timeout"
+  | "auth"
+  | "context_overflow"
+  | "overloaded"
+  | "format"
+  | "compaction_failure"
+  | "role_ordering"
+  | "image_size"
+  | "unknown";

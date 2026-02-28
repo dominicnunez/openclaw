@@ -22,7 +22,10 @@ describe("sanitizeUserFacingText", () => {
   );
 
   it("sanitizes role ordering errors", () => {
-    const result = sanitizeUserFacingText("400 Incorrect role information", { errorContext: true });
+    const result = sanitizeUserFacingText("400 Incorrect role information", {
+      errorContext: true,
+      errorKind: "role_ordering",
+    });
     expect(result).toContain("Message ordering conflict");
   });
 
@@ -36,9 +39,9 @@ describe("sanitizeUserFacingText", () => {
     "Context overflow: prompt too large for the model. Try /reset (or /new) to start a fresh session, or use a larger-context model.",
     "Request size exceeds model context window",
   ])("sanitizes direct context-overflow error: %s", (text) => {
-    expect(sanitizeUserFacingText(text, { errorContext: true })).toContain(
-      "Context overflow: prompt too large for the model.",
-    );
+    expect(
+      sanitizeUserFacingText(text, { errorContext: true, errorKind: "context_overflow" }),
+    ).toContain("Context overflow: prompt too large for the model.");
   });
 
   it.each([
@@ -73,10 +76,13 @@ describe("sanitizeUserFacingText", () => {
     );
   });
 
-  it("returns a friendly message for rate limit errors in Error: prefixed payloads", () => {
-    expect(sanitizeUserFacingText("Error: 429 Rate limit exceeded", { errorContext: true })).toBe(
-      "⚠️ API rate limit reached. Please try again later.",
-    );
+  it("returns a friendly message for rate limit errors", () => {
+    expect(
+      sanitizeUserFacingText("Error: 429 Rate limit exceeded", {
+        errorContext: true,
+        errorKind: "rate_limit",
+      }),
+    ).toBe("⚠️ API rate limit reached. Please try again later.");
   });
 
   it.each([
